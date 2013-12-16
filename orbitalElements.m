@@ -7,10 +7,9 @@
 %   -extend orbital elements to include:
 %       inclination, longitude of ascending node, argument of periapsis
 
-% Assumes that the following constants are defined:
-% G
 function elts = orbitalElements(pos,vel, priMass)
-
+    G=6.67384e-11;
+    
     r=norm(pos);
     v=norm(vel);
 

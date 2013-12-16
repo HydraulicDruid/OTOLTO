@@ -17,7 +17,7 @@
 
 function trajectory = iterateBallisticTrajectory(pos_init, vel_init, priMass, priRad, m_obj, C_D, A_ref, rho_SL, scaleheight, simTime, timestep)
 
-R_min=1000;
+R_min=priRad-100;
 
 t=0;
 stepsmade=1;
