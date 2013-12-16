@@ -31,14 +31,14 @@ t_step=0.4;
 sim_time=450;
 
 %hillclimbing stuff
-max_guesses=200;
+max_guesses=2500;
 missteps_to_reduce=18;
 stepsmallifier=1.5;
 stpmul=1;
 misstepcounter=0;
 
 mdot_schedule=[0 101.97 112.46 147.08 170 177 397.94 30000000; 37.74 31.47 14.44 25.06 45.29 22.19 10.77 9];
-tvc_schedule=[0 10 75.28 96 377.32 30000000;0 -0.0376 0.5335 1.081 1.6 1.6]; %currently just t, theta
+tvc_schedule=[0 10 54.31 102 372.2 3e7; 0 -0.0575 0.5259 1.07 1.5993 1.6]; %currently just t, theta
 solution_error=1e10;
 
 for hcstep=1:max_guesses

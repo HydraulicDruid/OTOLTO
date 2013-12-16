@@ -6,12 +6,13 @@
 % Note iterationTime = 0 gives one-period case and iterationTime = -1
 % gives until-ground-hit case.
 
-% returns a matrix whose columns are timesteps and whose eleven rows are:
+% returns a matrix whose columns are timesteps and whose twelve rows are:
 % timestep
 % position[3]
 % velocity[3]
 % acceleration[3]
 % Q
+% remaining propellant
 % 
 % things to be added later:
 % something about atmospheric heating
@@ -27,9 +28,10 @@ vel=vel_init;
 
 meco=0;
 
-trajectory=zeros(11,1);
+trajectory=zeros(12,1);
 trajectory(2:4,1)=pos;
 trajectory(5:7,1)=vel;
+trajectory(12,1)=m_fuel;
 
 m_obj=m_dry+m_fuel;
 
@@ -48,7 +50,7 @@ while(t<simTime)
     orb_elements=orbitalElements(trajectory(2:4,stepsmade),trajectory(5:7,stepsmade),priMass);
 
     if(orb_elements(1)>desired_orbenergy)
-        meco=1
+        meco=1;
     end;
     
     thrusttheta=interp1(tvcschedule(1,:),tvcschedule(2,:),t);
@@ -94,6 +96,7 @@ while(t<simTime)
     trajectory(2:4,stepsmade+1)=pos+(kx1+2*kx2+2*kx3+kx4)/6;
     trajectory(5:7,stepsmade+1)=vel+(kv1+2*kv2+2*kv3+kv4)/6;
     m_obj=m_obj-(km1+2*km2+2*km3+km4)/6;
+    trajectory(12,stepsmade+1)=m_obj-m_dry;
 
     t=t+dt;
     stepsmade=stepsmade+1;    
