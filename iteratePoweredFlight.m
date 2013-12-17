@@ -1,7 +1,7 @@
 % iterateBallisticTrajectory(position, velocity, priMass, priRad, 
 %   m_dry, m_fuel, thrustschedule, tvcschedule, v_exh, C_D, A_ref, 
 %   rho_SL, scaleheight,
-%   simTime, timestep)
+%   simTime, timestep, stopatmeco)
 
 % Note iterationTime = 0 gives one-period case and iterationTime = -1
 % gives until-ground-hit case.
@@ -17,7 +17,7 @@
 % things to be added later:
 % something about atmospheric heating
 
-function trajectory = iteratePoweredFlight(pos_init, vel_init, priMass, priRad, m_dry, m_fuel, thrustschedule, tvcschedule, v_exh, C_D, A_ref, rho_SL, scaleheight, simTime, timestep, desired_orbenergy)
+function trajectory = iteratePoweredFlight(pos_init, vel_init, priMass, priRad, m_dry, m_fuel, thrustschedule, tvcschedule, v_exh, C_D, A_ref, rho_SL, scaleheight, simTime, timestep, desired_orbenergy, stopatmeco)
 
 R_min=priRad-100;
 
@@ -50,6 +50,9 @@ while(t<simTime)
     orb_elements=orbitalElements(trajectory(2:4,stepsmade),trajectory(5:7,stepsmade),priMass);
 
     if(orb_elements(1)>desired_orbenergy)
+        if(stopatmeco)
+            break;
+        end
         meco=1;
     end;
     

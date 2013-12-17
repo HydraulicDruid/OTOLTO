@@ -16,30 +16,35 @@ v_exhaust=4000; %or use e.g. 450*9.81
 
 %% ROCKET INITIAL CONDITIONS
 
-%theta=0.0749;
-%pos_init=[-1e7,R_e,0];
-%vel_init=16000*[cos(theta),sin(theta),0];
-
 pos_init=[0;R_e;0];
 vel_init=[1;1;0];
 
 %% ROCKET DESIRED FINAL CONDITIONS
-desired_orbenergy=-29600000;
+desired_orbenergy=-29600000; %same altitude as ISS
 
 %% SIMULATION PROPERTIES
 t_step=0.8;
-sim_time=600;
+max_sim_time=900;
+stop_at_MECO=true;
 
 %hillclimbing stuff
-max_guesses=500;
+max_guesses=1000;
 missteps_to_reduce=12;
 stepsmallifier=1.5;
 stpmul=1;
 misstepcounter=0;
 
-mdot_schedule=[0,201.593680325808,394.018357219119,30000000;385.801175800646,355.388838869305,89.6945829028151,90];
-tvc_schedule=[0,10,86.4027676255286,68.1490413459862,428.296537203446,30000000;0,0.0119371444892641,0.592802205118879,1.14961116538635,1.38462051950640,1.42376917462570]; %currently just t, theta
+%just some values to start from - gives deliberately bad results,
+%and then the hillclimbing algorithm refines it.
+mdot_schedule=[0,200,400,3e7;400,350,90,90];
+tvc_schedule=[0,10,70,90,400,30000000;0,0,0,pi/2,pi/2,pi/2]; %currently just t, theta
 solution_error=10000;
+
+%because I am bad at plots:
+trajfig=figure('OuterPosition',[0 scrsize(4)/2 scrsize(3)/2 scrsize(4)/2]);
+velfig=figure('OuterPosition',[scrsize(3)/2 0 scrsize(3)/2 scrsize(4)/2]);
+accfig=figure('OuterPosition',[0 0 scrsize(3)/2 scrsize(4)/2]);
+qfig=figure('OuterPosition',[scrsize(3)/2 scrsize(4)/2 scrsize(3)/2 scrsize(4)/2]);
 
 for hcstep=1:max_guesses
     old_mdot_schedule=mdot_schedule;
@@ -59,14 +64,14 @@ for hcstep=1:max_guesses
     %% RUN SIMULATION
     trajectory=iteratePoweredFlight(pos_init, vel_init, M_e, R_e,  ... % MATLAB, you are utterly vile.
         m_dry, m_fuel, mdot_schedule, tvc_schedule, v_exhaust, CD_roc, A_ref, ...
-        rho_SL, scale_height, sim_time, t_step, desired_orbenergy);
+        rho_SL, scale_height, max_sim_time, t_step, desired_orbenergy, stop_at_MECO);
 
     %% CALCULATE ORBITAL ELEMENTS OF FINAL STATE
     orb_elements=orbitalElements(trajectory(2:4,size(trajectory,2)),trajectory(5:7,size(trajectory,2)),M_e);
 
     %% CALCULATE FITNESS
     solution_error=abs(orb_elements(1)-desired_orbenergy)/3e6+...
-        orb_elements(2)*60+...
+        orb_elements(2)*100+...
         (600-trajectory(12,size(trajectory,2)))/600;
     
 
