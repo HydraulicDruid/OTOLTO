@@ -9,9 +9,9 @@ scale_height=29.26*mean_temp;
 
 %% ROCKET PROPERTIES
 CD_roc=0.8;
-A_ref=1.5;
-m_dry=600;
-m_fuel=9400;
+A_ref=12.6;
+m_dry=10000;
+m_fuel=120000;
 v_exhaust=4000; %or use e.g. 450*9.81
 
 %% ROCKET INITIAL CONDITIONS
@@ -27,19 +27,19 @@ vel_init=[1;1;0];
 desired_orbenergy=-29600000;
 
 %% SIMULATION PROPERTIES
-t_step=0.4;
-sim_time=450;
+t_step=0.8;
+sim_time=600;
 
 %hillclimbing stuff
-max_guesses=200;
-missteps_to_reduce=18;
+max_guesses=500;
+missteps_to_reduce=12;
 stepsmallifier=1.5;
 stpmul=1;
 misstepcounter=0;
 
-mdot_schedule=[0 101.97 112.46 147.08 170 177 397.94 30000000; 37.74 31.47 14.44 25.06 45.29 22.19 10.77 9];
-tvc_schedule=[0 10 75.28 96 377.32 30000000;0 -0.0376 0.5335 1.081 1.6 1.6]; %currently just t, theta
-solution_error=1e10;
+mdot_schedule=[0,201.593680325808,394.018357219119,30000000;385.801175800646,355.388838869305,89.6945829028151,90];
+tvc_schedule=[0,10,86.4027676255286,68.1490413459862,428.296537203446,30000000;0,0.0119371444892641,0.592802205118879,1.14961116538635,1.38462051950640,1.42376917462570]; %currently just t, theta
+solution_error=10000;
 
 for hcstep=1:max_guesses
     old_mdot_schedule=mdot_schedule;
@@ -52,7 +52,7 @@ for hcstep=1:max_guesses
         kludge=1;
     end
     
-    mdot_schedule=old_mdot_schedule+kludge*stpmul*[0 5*randn 5*randn 5*randn 10*randn 10*randn 10*randn 0; 2*randn 2*randn 2*randn 2*randn 2*randn 2*randn 2*randn 0];
+    mdot_schedule=old_mdot_schedule+kludge*stpmul*[0 10*randn 10*randn 0; 2*randn 2*randn 2*randn 0];
     tvc_schedule=old_tvc_schedule+kludge*stpmul*[0 0 10*randn 10*randn 10*randn 0; 0 0.01*randn 0.01*randn 0.01*randn 0.01*randn 0.01*randn];
 
 
@@ -65,9 +65,9 @@ for hcstep=1:max_guesses
     orb_elements=orbitalElements(trajectory(2:4,size(trajectory,2)),trajectory(5:7,size(trajectory,2)),M_e);
 
     %% CALCULATE FITNESS
-    solution_error=... %abs(orb_elements(1)-desired_orbenergy)/2e7+...
-        orb_elements(2)*100+...
-        (200-trajectory(12,size(trajectory,2)))/200;
+    solution_error=abs(orb_elements(1)-desired_orbenergy)/3e6+...
+        orb_elements(2)*60+...
+        (600-trajectory(12,size(trajectory,2)))/600;
     
 
     
