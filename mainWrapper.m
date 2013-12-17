@@ -28,7 +28,7 @@ max_sim_time=900;
 stop_at_MECO=true;
 
 %hillclimbing stuff
-max_guesses=1;
+max_guesses=100;
 missteps_to_reduce=12;
 stepsmallifier=1.5;
 stpmul=1;
