@@ -76,23 +76,31 @@ while(t<simTime)
     
     %RK4 constants#
     km1=dt*emdot(t,thrustschedule,m_obj,m_dry,meco);
-    thrust1=v_exh*km1/dt;
-    kv1=dt*pwrd_acc(pos,vel,m_obj,priMass,C_D,A_ref,air_density,thrust1*[sin(t/200); cos(t/200); 0]);
+    thrustacc1=v_exh*km1/dt;
+    thrusttheta=interp1(tvcschedule(1,:),tvcschedule(2,:),t);
+    thr_uvec=[sin(thrusttheta);cos(thrusttheta);0];
+    kv1=dt*pwrd_acc(pos,vel,m_obj,priMass,C_D,A_ref,air_density,thrustacc1*thr_uvec);
     kx1=dt*vel;
     
     km2=dt*emdot(t+dt/2,thrustschedule,m_obj-(km1/2),m_dry,meco);
-    thrust2=v_exh*km2/dt;    
-    kv2=dt*pwrd_acc(pos+kx1/2,vel+kv1/2,m_obj,priMass,C_D,A_ref,air_density,thrust2*[sin((t+0.5*dt)/200); cos(t/200); 0]);
+    thrustacc2=v_exh*km2/dt;    
+    thrusttheta=interp1(tvcschedule(1,:),tvcschedule(2,:),t+dt/2);
+    thr_uvec=[sin(thrusttheta);cos(thrusttheta);0];
+    kv2=dt*pwrd_acc(pos+kx1/2,vel+kv1/2,m_obj,priMass,C_D,A_ref,air_density,thrustacc2*thr_uvec);
     kx2=dt*(vel+kv1/2);
     
     km3=dt*emdot(t+dt/2,thrustschedule,m_obj-(km2/2),m_dry,meco);
-    thrust3=v_exh*km3/dt;  
-    kv3=dt*pwrd_acc(pos+kx2/2,vel+kv2/2,m_obj,priMass,C_D,A_ref,air_density,thrust3*[sin((t+0.5*dt)/200); cos(t/200); 0]);
+    thrustacc3=v_exh*km3/dt;
+    thrusttheta=interp1(tvcschedule(1,:),tvcschedule(2,:),t+dt/2);
+    thr_uvec=[sin(thrusttheta);cos(thrusttheta);0];
+    kv3=dt*pwrd_acc(pos+kx2/2,vel+kv2/2,m_obj,priMass,C_D,A_ref,air_density,thrustacc3*thr_uvec);
     kx3=dt*(vel+kv2/2);
 
     km4=dt*emdot(t+dt,thrustschedule,m_obj-km3,m_dry,meco);
-    thrust4=v_exh*km4/dt;      
-    kv4=dt*pwrd_acc(pos+kx3,vel+kv3,m_obj,priMass,C_D,A_ref,air_density,thrust4*[sin((t+dt)/200); cos((t+dt)/200); 0]);
+    thrustacc4=v_exh*km3/dt;    
+    thrusttheta=interp1(tvcschedule(1,:),tvcschedule(2,:),t+dt);
+    thr_uvec=[sin(thrusttheta);cos(thrusttheta);0];    
+    kv4=dt*pwrd_acc(pos+kx3,vel+kv3,m_obj,priMass,C_D,A_ref,air_density,thrustacc4*thr_uvec);
     kx4=dt*(vel+kv3);
     
     %Log next values of position and velocity.

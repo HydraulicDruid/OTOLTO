@@ -17,7 +17,7 @@ v_exhaust=4000; %or use e.g. 450*9.81
 %% ROCKET INITIAL CONDITIONS
 
 pos_init=[0;R_e;0];
-vel_init=[1;1;0];
+vel_init=[0;0.1;0];
 
 %% ROCKET DESIRED FINAL CONDITIONS
 desired_orbenergy=-29600000; %same altitude as ISS
@@ -28,7 +28,7 @@ max_sim_time=900;
 stop_at_MECO=true;
 
 %hillclimbing stuff
-max_guesses=1000;
+max_guesses=1;
 missteps_to_reduce=12;
 stepsmallifier=1.5;
 stpmul=1;
@@ -36,8 +36,8 @@ misstepcounter=0;
 
 %just some values to start from - gives deliberately bad results,
 %and then the hillclimbing algorithm refines it.
-mdot_schedule=[0,200,400,3e7;400,350,90,90];
-tvc_schedule=[0,10,70,90,400,30000000;0,0,0,pi/2,pi/2,pi/2]; %currently just t, theta
+mdot_schedule=[0,200,390,3e7;395,350,90,90];
+tvc_schedule=[0,10,70,90,400,30000000;0,0,pi/3,pi/4,pi/2,0]; %currently just t, theta
 solution_error=10000;
 
 %because I am bad at plots:
@@ -58,7 +58,7 @@ for hcstep=1:max_guesses
     end
     
     mdot_schedule=old_mdot_schedule+kludge*stpmul*[0 10*randn 10*randn 0; 2*randn 2*randn 2*randn 0];
-    tvc_schedule=old_tvc_schedule+kludge*stpmul*[0 0 10*randn 10*randn 10*randn 0; 0 0.01*randn 0.01*randn 0.01*randn 0.01*randn 0.01*randn];
+    tvc_schedule=old_tvc_schedule+kludge*stpmul*[0 0 10*randn 10*randn 10*randn 0; 0 0.1*randn 0.1*randn 0.1*randn 0.1*randn 0.1*randn];
 
 
     %% RUN SIMULATION
