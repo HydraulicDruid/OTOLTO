@@ -10,7 +10,7 @@ scale_height=29.26*mean_temp;
 %% ROCKET PROPERTIES
 CD_roc=0.8;
 A_ref=12.6;
-m_dry=10000;
+m_dry=5000;
 m_fuel=120000;
 v_exhaust=4000; %or use e.g. 450*9.81
 
@@ -20,24 +20,25 @@ pos_init=[0;R_e;0];
 vel_init=[0;0.1;0];
 
 %% ROCKET DESIRED FINAL CONDITIONS
-desired_orbenergy=-29600000; %same altitude as ISS
+desired_orbenergy=-11390000; %GTO
+desired_eccentricity=0.6215;
 
 %% SIMULATION PROPERTIES
 t_step=0.8;
-max_sim_time=900;
-stop_at_MECO=true;
+max_sim_time=30000;
+stop_at_MECO=false;
 
 %hillclimbing stuff
-max_guesses=100;
-missteps_to_reduce=12;
-stepsmallifier=1.5;
+max_guesses=1;
+missteps_to_reduce=15;
+stepsmallifier=2;
 stpmul=1;
 misstepcounter=0;
 
 %just some values to start from - gives deliberately bad results,
 %and then the hillclimbing algorithm refines it.
-mdot_schedule=[0,200,390,3e7;395,350,90,90];
-tvc_schedule=[0,10,70,90,400,30000000;0,0,pi/3,pi/4,pi/2,0]; %currently just t, theta
+mdot_schedule=[0,119.093763034375,358.108006965819,30000000;379.583708735715,377.080412361437,136.184270733276,90];
+tvc_schedule=[0,10,48.4660229210056,189.829678541272,365.558781010889,30000000;0,-0.124613997811755,0.204199107601102,0.870224960740890,1.76819796415179,1.53923193702971]; %currently just t, theta
 solution_error=10000;
 
 %because I am bad at plots:
@@ -57,7 +58,7 @@ for hcstep=1:max_guesses
         kludge=1;
     end
     
-    mdot_schedule=old_mdot_schedule+kludge*stpmul*[0 10*randn 10*randn 0; 2*randn 2*randn 2*randn 0];
+    mdot_schedule=old_mdot_schedule+kludge*stpmul*[0 10*randn 10*randn 0; 10*randn 10*randn 10*randn 0];
     tvc_schedule=old_tvc_schedule+kludge*stpmul*[0 0 10*randn 10*randn 10*randn 0; 0 0.1*randn 0.1*randn 0.1*randn 0.1*randn 0.1*randn];
 
 
@@ -70,9 +71,9 @@ for hcstep=1:max_guesses
     orb_elements=orbitalElements(trajectory(2:4,size(trajectory,2)),trajectory(5:7,size(trajectory,2)),M_e);
 
     %% CALCULATE FITNESS
-    solution_error=abs(orb_elements(1)-desired_orbenergy)/3e6+...
-        orb_elements(2)*100+...
-        (600-trajectory(12,size(trajectory,2)))/600;
+    solution_error=abs(orb_elements(1)-desired_orbenergy)/1e7+...
+        abs(orb_elements(2)-desired_eccentricity)*100+...
+        (1300-trajectory(12,size(trajectory,2)))/2600;
     
 
     

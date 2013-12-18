@@ -53,7 +53,7 @@ while(t<simTime)
         if(stopatmeco)
             break;
         end
-        meco=1;
+        meco=1;    
     end;
     
     thrusttheta=interp1(tvcschedule(1,:),tvcschedule(2,:),t);
