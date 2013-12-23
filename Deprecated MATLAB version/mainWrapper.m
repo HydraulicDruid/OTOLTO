@@ -26,7 +26,7 @@ desired_eccentricity=0.6215;
 %% SIMULATION PROPERTIES
 t_step=0.8;
 max_sim_time=30000;
-stop_at_MECO=false;
+stop_at_MECO=true;
 
 %hillclimbing stuff
 max_guesses=1;

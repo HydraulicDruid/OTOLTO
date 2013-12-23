@@ -72,7 +72,7 @@ while(t<simTime)
     
     %Then work out Q, because things are all done in a stupid order anyway
     
-    trajectory(11,stepsmade)=1/2*norm(vel)*norm(vel)*air_density;
+    trajectory(11,stepsmade)=1/2*norm(vel)*norm(vel)*air_density*norm(vel);
     
     %RK4 constants#
     km1=dt*emdot(t,thrustschedule,m_obj,m_dry,meco);
