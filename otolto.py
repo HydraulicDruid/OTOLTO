@@ -278,13 +278,19 @@ class Rocket(object):
                 eventTimer=0.0
                 print("Ignition!")
                 
-            if nextEventType==1 and self.stages[-1].fuelmass<=self.separationPropLevels[-1]:
+            if nextEventType==1 and self.stages[-1].fuelmass<=self.separationPropLevels[-1] and len(self.stages)>1:
                 self.separationPropLevels.pop()
                 discardedStage=self.stages.pop()
                 enginesRunning=False
                 nextEventType=0
                 eventTimer=0.0
                 print("MECO, stage sep confirmed")
+            
+            if len(self.stages)==1 and self.stages[-1].fuelmass<=self.separationPropLevels[-1]:
+                enginesRunning=False
+                print("Upper stage burnout!")
+                if stopAtLastMeco:
+                    stopSimulation=True
             
             #decide on dt
             thphi=interpTVCSchedule(t);
