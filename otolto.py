@@ -1,6 +1,7 @@
 from math import *
 import numpy as np
 import scipy.interpolate as spip
+import copy
 
 G=6.67384e-11
 crash_alt=-20000 #no collision detection, so just end the simulation if >20km below ground
@@ -163,7 +164,7 @@ class Rocket(object):
     def addStage(self,stageToAdd,separationPropLevel,ignitionTime):
         """Stage is added to "bottom" of rocket - build the rocket 
         from top down"""
-        self.stages.append(stageToAdd)
+        self.stages.append(copy.copy(stageToAdd))
         self.separationPropLevels.append(separationPropLevel)
         self.ignitionTimes.append(ignitionTime)
         
@@ -341,6 +342,7 @@ class Rocket(object):
             #stop if we've crashed
             if planet.isBelowSurface(x):
                 stopSimulation=True
+                print('crashed!')
             
             #stop if we have enough orbital energy
             semiMajor=planet.fiveKeplerianElements(x,v)[1]
@@ -366,6 +368,7 @@ class Rocket(object):
             vehState[18]=self.totalMass()
             
             allStates.append(vehState)
+            
         
         return allStates
         
