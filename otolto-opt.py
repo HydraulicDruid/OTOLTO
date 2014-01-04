@@ -13,7 +13,7 @@ testAtmosphere=Atmosphere(0,1.2,29.26,260)
 testEarth=Planet(5.97219e24, 6371e3, 86164.1, testAtmosphere)
 
 testUpperStage=Stage(120.0,7.0,350.0,0.0,0.7,0.7,0.28,0.4,0.2)
-testLowerStage=Stage(1400.0,7.2,290.0,265.0,0.7,0.8,0.28,7.0,4.0)
+testLowerStage=Stage(1400.0,8.0,290.0,265.0,0.7,0.8,0.28,7.0,4.0)
 
 coords=np.array([0.0, 6371010.0, 0.0])
 velocity=np.array([0.0,0.0,0.0])
@@ -29,11 +29,11 @@ def f(blah):
     #be=2*(k/(steps-1))
     #print(str(ay)+","+str(be))
     #rows are time, theta, phi (theta is azimuth and phi is polar)
-    tvcSchedule=np.array([[0.,30.,400.,3e7], [pi/2,pi/2,pi/2,pi/2],[pi/2,pi/2+blah[0],pi/2+blah[1],pi/2+blah[1]]])
+    tvcSchedule=np.array([[0.,blah[3],blah[4],blah[5],3e7], [pi/2,pi/2,pi/2,pi/2,pi/2],[pi/2,pi/2+blah[0],pi/2+blah[1],pi/2+blah[2],pi/2+blah[2]]])
 
     testRocket=Rocket(propellantSchedule,tvcSchedule)
-    testRocket.addStage(testUpperStage,0.6,5)
-    testRocket.addStage(testLowerStage,10,0)
+    testRocket.addStage(testUpperStage,1,5)
+    testRocket.addStage(testLowerStage,20,0)
         
     testSim=Simulator(testEarth,testRocket,propellantSchedule,tvcSchedule)
         
@@ -46,6 +46,8 @@ def f(blah):
         
     #del(propellantSchedule)
     #del(tvcSchedule)
+
+spop.fmin(f, [0.123, 1.47, 1.85, 18.7, 126., 378.], maxiter=10)
     
 #for j in range(steps):
 #    for k in range(steps):

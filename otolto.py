@@ -349,7 +349,7 @@ class Rocket(object):
             semiMajor=planet.fiveKeplerianElements(x,v)[1]
             if semiMajor>=desiredSemiMajor and enginesRunning:
                 enginesRunning=False
-                print("Enough energy! t="+str(t)+", vel="+str(np.linalg.norm(v)))
+                print("Enough energy! t="+str(t)+", alt="+str(planet.altitude(x)))
                 if stopAtLastMeco:
                     stopSimulation=True
 
@@ -385,7 +385,8 @@ class Simulator(object):
         arrayFlightStats=np.asarray(flightStats).T
         
         kepEls=self.planet.fiveKeplerianElements(arrayFlightStats[1:4,-1],arrayFlightStats[4:7,-1])
+        propResidual=arrayFlightStats[17, -1]-self.rocket.separationPropLevels[-1]
         
-        fitness=kepEls[0]-(0.0*arrayFlightStats[17, -1]);
-        print("error="+str(fitness)+" ("+str(kepEls[0])+"-"+str(0.0*arrayFlightStats[17, -1])+")")
+        fitness=kepEls[0]-(0.001*propResidual)
+        print("error="+str(fitness)+" ("+str(kepEls[0])+"-"+str(0.001*propResidual)+")")
         return fitness;
