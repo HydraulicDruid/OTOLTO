@@ -4,7 +4,7 @@ import scipy.interpolate as spip
 import copy
 
 G=6.67384e-11
-crash_alt=-20000 #no collision detection, so just end the simulation if >20km below ground
+crash_alt=-5000 #no collision detection, so just end the simulation if >5km below ground
 
 def unit_vector(vector):
     """ Returns the unit vector of the vector.
@@ -230,7 +230,9 @@ class Rocket(object):
             Q
             remaining propellant"""
         
-        initialVel+=planet.absoluteWind(initialCoords)
+        x=np.copy(initialCoords)
+        v=np.copy(initialVel)
+        v+=planet.absoluteWind(x)
         
         interpPropSchedule=spip.interp1d(self.propellantUsageSchedule[0],self.propellantUsageSchedule[1],kind='linear')
         interpTVCSchedule=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='linear')
@@ -246,14 +248,14 @@ class Rocket(object):
         thphi=interpTVCSchedule(t);
         unitThrustVector=np.array([sin(thphi[0])*cos(thphi[1]), sin(thphi[0])*sin(thphi[1]),cos(thphi[0])])
         thrust=self.v_e_atAltitude(initialCoords,planet)*interpPropSchedule(t)*unitThrustVector
-        startAcceleration=self.dvdt(initialCoords,initialVel,self.totalMass(),planet,thrust)
+        startAcceleration=self.dvdt(x,v,self.totalMass(),planet,thrust)
         
         """drawn out this way for improved execution speed. I'm sure there's a 
         better way to do this..."""
         vehState=np.zeros(19)
         vehState[0]=t
-        vehState[1:4]=initialCoords
-        vehState[4:7]=initialVel
+        vehState[1:4]=np.copy(x)
+        vehState[4:7]=np.copy(v)
         vehState[7:10]=startAcceleration[0]  #a_thrust
         vehState[10:13]=startAcceleration[1] #a_drag
         vehState[13:16]=startAcceleration[2] #a_gravity
@@ -263,8 +265,7 @@ class Rocket(object):
         
         allStates.append(vehState)
         
-        x=initialCoords
-        v=initialVel
+
         
         while t<maxSimTime and stopSimulation==False:
             #print("---DEBUG: X AND V---")
@@ -277,7 +278,7 @@ class Rocket(object):
                 enginesRunning=True
                 nextEventType=1
                 eventTimer=0.0
-                print("Ignition!")
+                print("ignition, ", end="")
                 
             if nextEventType==1 and self.stages[-1].fuelmass<=self.separationPropLevels[-1] and len(self.stages)>1:
                 self.separationPropLevels.pop()
@@ -285,11 +286,11 @@ class Rocket(object):
                 enginesRunning=False
                 nextEventType=0
                 eventTimer=0.0
-                print("MECO, stage sep confirmed")
+                print("MECO & stage sep (t="+str(t)+", alt="+str(planet.altitude(x))+") ", end="")
             
             if len(self.stages)==1 and self.stages[-1].fuelmass<=self.separationPropLevels[-1]:
                 enginesRunning=False
-                print("Upper stage burnout!")
+                print("upper stage burnout! t="+str(t)+", alt="+str(planet.altitude(x)))
                 if stopAtLastMeco:
                     stopSimulation=True
             
@@ -317,7 +318,7 @@ class Rocket(object):
                 
                 thphi=interpTVCSchedule(t+substep*dt);
                 unitThrustVector=np.array([sin(thphi[0])*cos(thphi[1]), sin(thphi[0])*sin(thphi[1]),cos(thphi[0])])
-                thrust=self.v_e_atAltitude(initialCoords,planet)*km[j]*unitThrustVector
+                thrust=self.v_e_atAltitude(x,planet)*km[j]*unitThrustVector
                 a=self.dvdt(x+substep*dt*kx[j-1,:], v+substep*dt*kv[j-1,:], self.totalMass()-substep*dt*km[j-1],planet,thrust)
                 
                 #print(a)
@@ -348,7 +349,7 @@ class Rocket(object):
             semiMajor=planet.fiveKeplerianElements(x,v)[1]
             if semiMajor>=desiredSemiMajor and enginesRunning:
                 enginesRunning=False
-                print("Specific orbital energy sufficient!")
+                print("Enough energy! t="+str(t)+", vel="+str(np.linalg.norm(v)))
                 if stopAtLastMeco:
                     stopSimulation=True
 
@@ -372,3 +373,19 @@ class Rocket(object):
         
         return allStates
         
+class Simulator(object):
+    def __init__(self,planet,rocket,propellantSchedule,tvcSchedule):
+        self.tvcSchedule=tvcSchedule
+        self.propellantSchedule=propellantSchedule
+        self.rocket=rocket
+        self.planet=planet
+    
+    def plfitness(self,initialCoords,initialVel,maxSimTime, timeStep, stopAtLastMeco, desiredSemiMajor):
+        flightStats=self.rocket.simulateFlight(initialCoords,initialVel, self.planet, maxSimTime, timeStep, stopAtLastMeco, desiredSemiMajor);
+        arrayFlightStats=np.asarray(flightStats).T
+        
+        kepEls=self.planet.fiveKeplerianElements(arrayFlightStats[1:4,-1],arrayFlightStats[4:7,-1])
+        
+        fitness=kepEls[0]-(0.0*arrayFlightStats[17, -1]);
+        print("error="+str(fitness)+" ("+str(kepEls[0])+"-"+str(0.0*arrayFlightStats[17, -1])+")")
+        return fitness;
