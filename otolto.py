@@ -380,13 +380,33 @@ class Simulator(object):
         self.rocket=rocket
         self.planet=planet
     
-    def plfitness(self,initialCoords,initialVel,maxSimTime, timeStep, stopAtLastMeco, desiredSemiMajor):
+    def plfitness(self,initialCoords,initialVel,maxSimTime, timeStep, stopAtLastMeco, desiredSemiMajor,desiredEccentricity):
         flightStats=self.rocket.simulateFlight(initialCoords,initialVel, self.planet, maxSimTime, timeStep, stopAtLastMeco, desiredSemiMajor);
         arrayFlightStats=np.asarray(flightStats).T
+        
+        eccTol=0.002
+        smaTol=15000
+        
+        smaWeight=0.001
+        eccWeight=20
+        propResidualWeight=-0.1
         
         kepEls=self.planet.fiveKeplerianElements(arrayFlightStats[1:4,-1],arrayFlightStats[4:7,-1])
         propResidual=arrayFlightStats[17, -1]-self.rocket.separationPropLevels[-1]
         
-        fitness=kepEls[0]-(0.001*propResidual)
-        print("error="+str(fitness)+" ("+str(kepEls[0])+"-"+str(0.001*propResidual)+")")
+        fitness=0.;
+        componentstr=""
+        
+        if abs(desiredSemiMajor-kepEls[1])>smaTol:
+            fitness+=(abs(desiredSemiMajor-kepEls[1])-smaTol)*smaWeight
+            componentstr+="a was "+str(kepEls[1])+", "
+            
+        if abs(kepEls[0]-desiredEccentricity)>eccTol:
+            fitness+=(abs(kepEls[0]-desiredEccentricity)-eccTol)*eccWeight
+            componentstr+="e was "+str(kepEls[0])
+        else:
+            fitness+=propResidual*propResidualWeight
+            componentstr+="e good and "+str(propResidualWeight)+"kg residual."
+        
+        print("error="+str(fitness)+" ("+componentstr+")")
         return fitness;

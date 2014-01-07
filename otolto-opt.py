@@ -13,7 +13,7 @@ testAtmosphere=Atmosphere(0,1.2,29.26,260)
 testEarth=Planet(5.97219e24, 6371e3, 86164.1, testAtmosphere)
 
 testUpperStage=Stage(120.0,7.0,350.0,0.0,0.7,0.7,0.28,0.4,0.2)
-testLowerStage=Stage(1400.0,8.0,290.0,265.0,0.7,0.8,0.28,7.0,4.0)
+testLowerStage=Stage(1400.0,7.2,290.0,265.0,0.7,0.8,0.28,7.0,4.0)
 
 coords=np.array([0.0, 6371010.0, 0.0])
 velocity=np.array([0.0,0.0,0.0])
@@ -29,7 +29,7 @@ def f(blah):
     #be=2*(k/(steps-1))
     #print(str(ay)+","+str(be))
     #rows are time, theta, phi (theta is azimuth and phi is polar)
-    tvcSchedule=np.array([[0.,blah[3],blah[4],blah[5],3e7], [pi/2,pi/2,pi/2,pi/2,pi/2],[pi/2,pi/2+blah[0],pi/2+blah[1],pi/2+blah[2],pi/2+blah[2]]])
+    tvcSchedule=np.array([[0.,blah[3]*100.,blah[4]*100.,blah[5]*100.,3e7], [pi/2,pi/2,pi/2,pi/2,pi/2],[pi/2,pi/2+blah[0],pi/2+blah[1],pi/2+blah[2],pi/2+blah[2]]])
 
     testRocket=Rocket(propellantSchedule,tvcSchedule)
     testRocket.addStage(testUpperStage,1,5)
@@ -39,7 +39,7 @@ def f(blah):
         
     #arr[j][k]=testSim.plfitness(coords,velocity,700,10., True, desiredSemiMajor)
 
-    return testSim.plfitness(coords,velocity,700,10., True, desiredSemiMajor)
+    return testSim.plfitness(coords,velocity,700,1., True, desiredSemiMajor, desiredEccentricity)
         
     #del(testRocket)
     #del(testSim)
@@ -47,7 +47,19 @@ def f(blah):
     #del(propellantSchedule)
     #del(tvcSchedule)
 
-spop.fmin(f, [0.123, 1.47, 1.85, 18.7, 126., 378.], maxiter=10)
+initialThing=np.zeros((2,3))
+for k in range(3):
+    initialThing[0][k]=np.random.rand()*0.8
+    initialThing[1][k]=np.random.rand()*2.0
+    
+initialThing=np.cumsum(initialThing, axis=1)
+initialThing=np.concatenate((initialThing[0],initialThing[1]), axis=1)
+
+print(initialThing)
+
+#spop.fmin_bfgs(f, [-0.1076601, 2.10792968, 0.37004736, 4.03], maxiter=2)
+test=spop.fmin(f, [  2.44515213e-04,   9.67057808e-01,   2.10612178e+00, 3.31306112e-01,   2.24395094e+00,   3.98517198e+00], maxiter=10)
+#print("closest found: "+str(test))
     
 #for j in range(steps):
 #    for k in range(steps):
