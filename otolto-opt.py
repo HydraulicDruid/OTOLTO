@@ -39,7 +39,7 @@ def f(blah):
         
     #arr[j][k]=testSim.plfitness(coords,velocity,700,10., True, desiredSemiMajor)
 
-    return testSim.plfitness(coords,velocity,700,1., True, desiredSemiMajor, desiredEccentricity)
+    return testSim.plfitness(coords,velocity,700,10., True, desiredSemiMajor, desiredEccentricity)
         
     #del(testRocket)
     #del(testSim)

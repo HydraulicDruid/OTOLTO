@@ -125,9 +125,10 @@ class Stage(object):
     TODO (MEDIUM): support for C_D vs AoA and Mach rather than constant C_D
     TODO (LOW): support for nonzero L/D ratios
     """
-    def __init__(self,M,M_R,vac_Isp,SL_Isp,C_D_ind,C_D_below,frontalArea,max_throttle,min_throttle):
+    def __init__(self,M,M_R,vac_Isp,SL_Isp,C_D_ind,C_D_below,frontalArea,max_throttle,min_throttle,throttle_schedule,prop_margin):
         self.drymass=M/M_R;
-        self.fuelmass=M-self.drymass
+        self.propmass=M-self.drymass
+        self.residualProp=self.propmass*prop_margin
         self.vac_Isp=vac_Isp
         self.SL_Isp=SL_Isp
         self.C_D=C_D_ind
@@ -136,8 +137,57 @@ class Stage(object):
         self.maxThrottle=max_throttle
         self.minThrottle=min_throttle
         
+        """A weird halfway thing: integrate actual propellant flow values (as 
+        opposed to relative values in throttle_schedule) over unit time. This 
+        essentially gives us the mean throttle value."""
+        meanThrottle=min_throttle
+        
+        for j in range(len(throttle_schedule[0])-1):
+            meanThrottle+=(max_throttle-min_throttle)*0.5*(throttle_schedule[1][j+1]+throttle_schedule[1][j])*(throttle_schedule[0][j+1]-throttle_schedule[0][j])
+            
+        self.burnoutTime=(self.propmass*(1-prop_margin))/meanThrottle
+        self.ignitionTime=0.0
+        
+        self.throttleSchedule=np.copy(throttle_schedule)
+        
+        for j in range(len(self.throttleSchedule[0])):
+            self.throttleSchedule[0][j]*=self.burnoutTime
+            self.throttleSchedule[1][j]=min_throttle+(max_throttle-min_throttle)*self.throttleSchedule[1][j]
+            
+        self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='linear')
+        
     def burnFuel(self,mass):
-        self.fuelmass-=mass
+        self.propmass-=mass
+        print("Stage.burnFuel is deprecated!")
+        
+    def mass(self,time):
+        if time>=self.burnoutTime:
+            return self.drymass+self.residualProp
+        elif time<self.ignitionTime:
+            return self.drymass+self.propmass
+        else:
+            for j in range(len(self.throttleSchedule[0])-1):
+                if (time>=self.throttleSchedule[1][j]) and (time<self.throttleSchedule[1][j+1]):
+                    lastControlPointIndex=j
+                    
+            propburned=0.0
+            
+            for j in range(lastControlPointIndex):
+                propburned+=0.5*(self.throttleSchedule[1][j+1]+self.throttleSchedule[1][j])*(self.throttleSchedule[0][j+1]-self.throttleSchedule[0][j])
+            
+            propburned+=0.5*(self.self.mdotInterpolated(time)+self.throttleSchedule[1][lastControlPointIndex])*(time-self.throttleSchedule[0][lastControlPointIndex])
+
+    def thrust(self,time,x,planet):
+        """This needs to be fixed later. Currently it's just about as wrong as 
+        it's possible for it to be."""
+        rho_SL=planet.atmosphere.rho_SL
+        sl_v_e=self.SL_Isp*9.81
+        vc_v_e=self.vac_Isp*9.81
+        return self.mdotInterpolated(time)*(sl_v_e+(vc_v_e-sl_v_e)*((rho_SL-planet.get_atm_rho(x))/rho_SL))
+        
+    def addToRocket(self,previousStageBurnoutTime,coastTime):
+        self.ignitionTime=previousStageBurnoutTime+coastTime
+        self.burnoutTime+=self.ignitionTime
             
 class Rocket(object):
     """A rocket with an arbitrary number of stages, each of which has its own 
@@ -214,6 +264,10 @@ class Rocket(object):
         sl_v_e=self.stages[-1].SL_Isp*9.81
         vc_v_e=self.stages[-1].vac_Isp*9.81
         return sl_v_e+(vc_v_e-sl_v_e)*((rho_SL-planet.get_atm_rho(x))/rho_SL)
+    
+    def sDash(s):
+        """s is the rocket's state vector, consisting of: x_{1,2,3},v_{1,2,3},a_{1,2,3},m.
+        Note however that m is purely a function of t."""
          
     def simulateFlight(self,initialCoords,initialVel, planet, maxSimTime, timeStep, stopAtLastMeco, desiredSemiMajor):
         """Simulate the rocket's flight. Assumes all stages have been added and 
