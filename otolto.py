@@ -1,7 +1,9 @@
 from math import *
 import numpy as np
 import scipy.interpolate as spip
+from scipy.integrate import ode,odeint
 import copy
+import warnings
 
 G=6.67384e-11
 crash_alt=-5000 #no collision detection, so just end the simulation if >5km below ground
@@ -125,15 +127,14 @@ class Stage(object):
     TODO (MEDIUM): support for C_D vs AoA and Mach rather than constant C_D
     TODO (LOW): support for nonzero L/D ratios
     """
-    def __init__(self,M,M_R,vac_Isp,SL_Isp,C_D_ind,C_D_below,frontalArea,max_throttle,min_throttle,throttle_schedule,prop_margin):
+    def __init__(self,M,M_R,vac_Isp,SL_Isp,additional_C_D,additional_frontal_area,max_throttle,min_throttle,throttle_schedule,prop_margin,tvc_schedule):
         self.drymass=M/M_R;
         self.propmass=M-self.drymass
         self.residualProp=self.propmass*prop_margin
         self.vac_Isp=vac_Isp
         self.SL_Isp=SL_Isp
-        self.C_D=C_D_ind
-        self.C_D_below=C_D_below
-        self.frontalArea=frontalArea
+        self.C_D_additional=additional_C_D
+        self.additionalFrontalArea=additional_frontal_area
         self.maxThrottle=max_throttle
         self.minThrottle=min_throttle
         
@@ -144,17 +145,26 @@ class Stage(object):
         
         for j in range(len(throttle_schedule[0])-1):
             meanThrottle+=(max_throttle-min_throttle)*0.5*(throttle_schedule[1][j+1]+throttle_schedule[1][j])*(throttle_schedule[0][j+1]-throttle_schedule[0][j])
+        
+        if meanThrottle>0:
+            self.burnoutTime=(self.propmass*(1-prop_margin))/meanThrottle
+        else:
+            self.burnoutTime=3e7
             
-        self.burnoutTime=(self.propmass*(1-prop_margin))/meanThrottle
         self.ignitionTime=0.0
+        self.sepTime=self.burnoutTime
         
         self.throttleSchedule=np.copy(throttle_schedule)
+        self.tvcSchedule=np.copy(tvc_schedule)
         
-        for j in range(len(self.throttleSchedule[0])):
-            self.throttleSchedule[0][j]*=self.burnoutTime
-            self.throttleSchedule[1][j]=min_throttle+(max_throttle-min_throttle)*self.throttleSchedule[1][j]
+        self.throttleSchedule[0][0:len(self.throttleSchedule[0])]*=self.burnoutTime
+        self.throttleSchedule[1][0:len(self.throttleSchedule[1])]*=(max_throttle-min_throttle)
+        self.throttleSchedule[1][0:len(self.throttleSchedule[1])]+=min_throttle
+        
+        self.tvcSchedule[0][0:len(self.tvcSchedule[1])]*=self.burnoutTime
             
         self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='linear')
+        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='linear')
         
     def burnFuel(self,mass):
         self.propmass-=mass
@@ -162,12 +172,17 @@ class Stage(object):
         
     def mass(self,time):
         if time>=self.burnoutTime:
-            return self.drymass+self.residualProp
+            if time>=self.sepTime:
+                return 0.
+            else:
+                return self.drymass+self.residualProp
         elif time<self.ignitionTime:
             return self.drymass+self.propmass
         else:
+            lastControlPointIndex=0
+            
             for j in range(len(self.throttleSchedule[0])-1):
-                if (time>=self.throttleSchedule[1][j]) and (time<self.throttleSchedule[1][j+1]):
+                if (time>=self.throttleSchedule[0][j]) and (time<self.throttleSchedule[0][j+1]):
                     lastControlPointIndex=j
                     
             propburned=0.0
@@ -175,19 +190,47 @@ class Stage(object):
             for j in range(lastControlPointIndex):
                 propburned+=0.5*(self.throttleSchedule[1][j+1]+self.throttleSchedule[1][j])*(self.throttleSchedule[0][j+1]-self.throttleSchedule[0][j])
             
-            propburned+=0.5*(self.self.mdotInterpolated(time)+self.throttleSchedule[1][lastControlPointIndex])*(time-self.throttleSchedule[0][lastControlPointIndex])
+            propburned+=0.5*(self.mdotInterpolated(time)+self.throttleSchedule[1][lastControlPointIndex])*(time-self.throttleSchedule[0][lastControlPointIndex])
+            
+            return self.drymass+self.propmass-propburned
 
-    def thrust(self,time,x,planet):
-        """This needs to be fixed later. Currently it's just about as wrong as 
-        it's possible for it to be."""
-        rho_SL=planet.atmosphere.rho_SL
-        sl_v_e=self.SL_Isp*9.81
-        vc_v_e=self.vac_Isp*9.81
-        return self.mdotInterpolated(time)*(sl_v_e+(vc_v_e-sl_v_e)*((rho_SL-planet.get_atm_rho(x))/rho_SL))
+    def thrust(self,t,x,planet):
+        """I_sp variation with altitude needs fixing."""
+        if t>=self.burnoutTime or t<self.ignitionTime:
+            return np.zeros(3)
+        else:
+            rho_SL=planet.atmosphere.rho_SL
+            sl_v_e=self.SL_Isp*9.81
+            vc_v_e=self.vac_Isp*9.81
+            thrustMag=self.mdotInterpolated(t)*(sl_v_e+(vc_v_e-sl_v_e)*((rho_SL-planet.get_atm_rho(x))/rho_SL))
         
-    def addToRocket(self,previousStageBurnoutTime,coastTime):
-        self.ignitionTime=previousStageBurnoutTime+coastTime
-        self.burnoutTime+=self.ignitionTime
+            thphi=self.TVCsInterpolated(t);
+            unitThrustVector=np.array([sin(thphi[0])*cos(thphi[1]), sin(thphi[0])*sin(thphi[1]),cos(thphi[0])])
+        
+            return thrustMag*unitThrustVector
+    
+    def dragCoefficientContribution(self,t):
+        if t<self.sepTime:
+            return self.C_D_additional
+        else:
+            return 0
+            
+    def frontalAreaContribution(self,t):
+        if t<self.sepTime:
+            return self.additionalFrontalArea
+        else:
+            return 0
+        
+    def shiftTimesBy(self,preIgnitionCoastTime,postBurnoutCoastTime):
+        self.ignitionTime+=preIgnitionCoastTime
+        self.burnoutTime+=preIgnitionCoastTime
+        self.sepTime+=preIgnitionCoastTime+postBurnoutCoastTime
+        
+        self.tvcSchedule[0][0:len(self.tvcSchedule[0])]+=preIgnitionCoastTime
+        self.throttleSchedule[0][0:len(self.throttleSchedule[0])]+=preIgnitionCoastTime
+        
+        self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='linear')
+        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='linear')        
             
 class Rocket(object):
     """A rocket with an arbitrary number of stages, each of which has its own 
@@ -195,21 +238,32 @@ class Rocket(object):
     of drag, coefficient of drag when attached to upper stages,...
     Also, a propellant usage schedule, staging times, and a thrust vectoring 
     schedule.
-    TODO (HIGH): implement fairings.
-    TODO (MEDIUM): implement parallel staging & propellant cross-feed
-    TODO (LOW): make the rocket a rocket rather than a point mass, and include 
-        rotational inertia (so tvc schedule is actual tvc schedule rather than
-        magically pointing thrust vector elsewhere.
         """
-    def __init__(self, propellantSchedule, tvcSchedule):
+
+    def __init__(self,payload):
+    #TODO (HIGH): implement fairings.
+    #TODO (MEDIUM): implement parallel staging & propellant cross-feed
+    #TODO (LOW): make the rocket a rocket rather than a point mass, and include rotational inertia (so tvc schedule is actual tvc schedule rather than magically pointing thrust vector elsewhere).        
         self.stages=[]
-        self.ignitionTimes=[]
-        self.separationPropLevels=[]
-        self.propellantUsageSchedule=propellantSchedule
-        self.tvcSchedule=tvcSchedule
+        self.flightlog=[]
+        self.stages.append(copy.copy(payload))
+#        self.ignitionTimes=[]
+#        self.separationPropLevels=[]
+#        self.propellantUsageSchedule=propellantSchedule
+#        self.tvcSchedule=tvcSchedule
         
-        self.position=np.array([0.0,0.0,0.0])
-        self.velocity=self.position
+#        self.position=np.zeros(3)
+#        self.velocity=np.zeros(3)
+        
+    def addSerialStage(self,stageToAdd,preignitionCoastTime,postBurnoutCoastTime):
+        stageCopy=copy.copy(stageToAdd)
+        
+        stageCopy.shiftTimesBy(preignitionCoastTime,postBurnoutCoastTime)
+        
+        for stage in self.stages:
+            stage.shiftTimesBy(stageCopy.sepTime,0.0)
+
+        self.stages.append(stageCopy)
         
     def addStage(self,stageToAdd,separationPropLevel,ignitionTime):
         """Stage is added to "bottom" of rocket - build the rocket 
@@ -217,10 +271,12 @@ class Rocket(object):
         self.stages.append(copy.copy(stageToAdd))
         self.separationPropLevels.append(separationPropLevel)
         self.ignitionTimes.append(ignitionTime)
+        print("deprecated!")
         
     def separateStage(self):
         self.ignitionTimes.remove(-1)
         self.separationPropLevels.remove(-1)
+        print("deprecated!")
         return self.stages.pop()
         
     def totalMass(self):
@@ -228,14 +284,17 @@ class Rocket(object):
         for S in self.stages:
             m+=S.drymass
         return m
+        print("deprecated!")
         
     def totalPropMass(self):
         m=0
         for S in self.stages:
             m+=S.fuelmass
         return m
+        print("deprecated!")
         
     def dmdt(self,mdot,fuelmass,engineRunning):
+        print("deprecated!")
         if fuelmass>0 and engineRunning:
             return min(self.stages[-1].maxThrottle,max(mdot,self.stages[-1].minThrottle))
         else:
@@ -265,9 +324,150 @@ class Rocket(object):
         vc_v_e=self.stages[-1].vac_Isp*9.81
         return sl_v_e+(vc_v_e-sl_v_e)*((rho_SL-planet.get_atm_rho(x))/rho_SL)
     
-    def sDash(s):
-        """s is the rocket's state vector, consisting of: x_{1,2,3},v_{1,2,3},a_{1,2,3},m.
-        Note however that m is purely a function of t."""
+    def sDot(self,t,s,planet,targetSMA):
+        """s is the rocket's state vector, consisting of: x_{1,2,3},v_{1,2,3},m.
+        Note that a and m are purely a function of t."""
+
+        x=s[0:3]
+        v=s[3:6]
+        
+        kepEls=planet.fiveKeplerianElements(x,v)
+        
+        sdot=np.zeros(7)
+        
+        if kepEls[1]>=targetSMA:
+            sdot[6]=0
+            #print(s)
+            print(str(kepEls[1])+">="+str(targetSMA))
+            return sdot            
+        else:
+            sdot[0:3]=v
+            
+            F_t=self.thrust(t,x,planet)
+            a_t=F_t/self.mass(t)
+            
+            v_air=v-planet.absoluteWind(x)
+            airspeed=np.linalg.norm(v_air)
+            a_d=-v_air*(0.5*planet.get_atm_rho(x)*airspeed*self.dragCoefficient(t)*self.frontalArea(t))/self.mass(t)
+            
+            a_g=planet.gravity(x)
+            
+            sdot[3:6]=a_t+a_d+a_g
+            
+            sdot[6]=1
+            
+            flightstatus=np.zeros(5)
+            flightstatus[0]=t
+            flightstatus[1]=self.mass(t)
+            flightstatus[2]=np.linalg.norm(a_t)
+            flightstatus[3]=np.linalg.norm(a_d)
+            flightstatus[4]=np.linalg.norm(a_g)
+                                    
+            self.flightlog.append(flightstatus)
+                        
+            return sdot
+            
+
+    def thrust(self,t,x,planet):
+        """Sum thrusts of all stages at t. This allows for future features like parallel staging."""
+        thrust=np.zeros(3)
+        for stage in self.stages:
+            thrust+=stage.thrust(t,x,planet)
+        return thrust
+        
+    def mass(self,t):
+        mass=0.
+        for stage in self.stages:
+            mass+=stage.mass(t)
+        return mass
+            
+    def dragCoefficient(self,t):
+        drag_coefficient=0.
+        for stage in self.stages:
+            drag_coefficient+=stage.dragCoefficientContribution(t)
+        return drag_coefficient
+        
+    def frontalArea(self,t):
+        frontal_area=0.
+        for stage in self.stages:
+            frontal_area+=stage.frontalAreaContribution(t)
+        return frontal_area
+    
+    def integrateFlight(self,initialCoords,initialVel,planet,t0,maxSimTime, stopOnSuccess, desiredSemiMajor):
+        #TODO: add support for stopOnSuccess
+        backend='dopri5'
+        
+        s0=np.zeros(7)
+        s0[0:3]=initialCoords
+        s0[3:6]=initialVel
+        s0[6]=1
+        
+        #solver = odeint(self.sDot).set_integrator(backend)
+        #solver.set_initial_value(s0, t0)
+        #solver.set_f_params(planet,desiredSemiMajor)
+        
+        return odeint(self.sDot,s0,t0,args=(planet,desiredSemiMajor),full_output=True)
+        
+    def rk4Flight(self,initialCoords,initialVel,planet,t0,simTime,stopOnSuccess,desiredSemiMajor,h_base):
+
+        singularitytimes=[]
+        for s in self.stages:
+            singularitytimes.append(s.ignitionTime)
+            singularitytimes.append(s.burnoutTime)
+            singularitytimes.append(s.sepTime)
+        
+        h_min=1e-12
+        
+        terminalGuidanceThreshold=200000*h_base
+        singularityThreshold=3*h_base
+        terminalGuidanceActive=False
+        
+        self.flightlog=[]
+
+        s=np.zeros(7)
+        s[0:3]=initialCoords
+        s[3:6]=initialVel
+        s[6]=1
+        
+        t=t0
+        
+        traj=[]
+        
+        keepSimulating=1
+        
+        while t<simTime and keepSimulating>0 and t<self.stages[1].burnoutTime:
+            distanceToNextSingularity=3e7
+            
+            for time in singularitytimes:
+                if t<time and time-t<distanceToNextSingularity:
+                    distanceToNextSingularity=time-t
+            
+            traj.append(np.copy(s))
+            k1=self.sDot(t,s,planet,desiredSemiMajor)
+
+            kepEls=planet.fiveKeplerianElements(s[0:3],s[3:6])
+            
+            if desiredSemiMajor-kepEls[1]<terminalGuidanceThreshold:
+                h=max(h_min, h_base*(desiredSemiMajor-kepEls[1])/terminalGuidanceThreshold)
+                if not terminalGuidanceActive:
+                    terminalGuidanceActive=True
+                    print("Terminal guidance active!")
+            elif distanceToNextSingularity<singularityThreshold:
+                h=max(h_min, h_base*distanceToNextSingularity/singularityThreshold)
+            else:
+                h=h_base
+
+            k2=self.sDot(t+0.5*h,s+(0.5*h)*k1,planet,desiredSemiMajor)
+            k3=self.sDot(t+0.5*h,s+(0.5*h)*k2,planet,desiredSemiMajor)            
+            k4=self.sDot(t+h,s+h*k3,planet,desiredSemiMajor)
+            
+            s+=h*(k1+2*k2+2*k3+k4)/6
+            t+=h
+            
+            if(stopOnSuccess==True):
+                keepSimulating=k4[6]
+         
+        return traj
          
     def simulateFlight(self,initialCoords,initialVel, planet, maxSimTime, timeStep, stopAtLastMeco, desiredSemiMajor):
         """Simulate the rocket's flight. Assumes all stages have been added and 
@@ -318,9 +518,7 @@ class Rocket(object):
         vehState[18]=self.totalMass()
         
         allStates.append(vehState)
-        
-
-        
+              
         while t<maxSimTime and stopSimulation==False:
             #print("---DEBUG: X AND V---")
             #print(x)
