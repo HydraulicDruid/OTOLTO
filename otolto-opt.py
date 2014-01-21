@@ -22,20 +22,31 @@ steps=10
 
 arr=np.zeros((steps,steps))
 
-testStartPoint=np.array([1.0,1.0,0.25,0.5,0.75,1.0,1.0,1.0,1.0,1.0,0.5,pi/2,pi/2+0.4,pi/2+0.8,0.5,pi/2+0.8,pi/2+1.2,pi])
+testStartPoint=np.array([1.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,0.5,0,0.4,0.8,0.5,0.8,1.2,1.6])
 
-testStartPoint=np.asarray([ 0.97368009,  0.96763239,  0.24523624,  0.49324878,  0.72762755, 1.00416857,  0.95933795,  0.97403668,  0.95350731,  1.00531046, 0.46458082,  1.67220112,  2.17312733,  2.66346563,  0.41540276, 2.4781154 ,  3.13789563,  3.55330601])
+#testStartPoint=np.asarray([ 0.97368009,  0.96763239,  0.24523624,  0.49324878,  0.72762755, 1.00416857,  0.95933795,  0.97403668,  0.95350731,  1.00531046, 0.46458082,  1.67220112,  2.17312733,  2.66346563,  0.41540276, 2.4781154 ,  3.13789563,  3.55330601])
 #testStartPoint=np.array([  3.11592812,   2.31278171,   0.25      ,   0.5       , 0.75      ,   3.98778947,   4.19956555,   1.90349192, 3.27566526,   2.63714774, -14.90366124,   4.38034555, 21.22269636,  23.06061613,  -1.72499083,   7.37530809, 5.48134183,  -2.59405555])
 #testStartPoint=np.array([  1,   1,   0.25      ,   0.5       , 0.75      ,   1,   1,   1, 1,   1, -14.90366124,   4.38034555, 21.22269636,  23.06061613,  -1.72499083,   7.37530809, 5.48134183,  -2.59405555])
 
 def f(pars):
-    """for the current test, we have 0+2 upperstage throttle, 3+5 lowerstage throttle,
-    1+3 upperstage tvc-theta and 1+3 lowerstage tvc-theta points - 18 in all"""
-    upperThrottleSchedule=np.array([[0.,1.],[pars[0],pars[1]]])
-    lowerThrottleSchedule=np.array([[0.,pars[2],pars[3],pars[4],1.],[pars[5],pars[6],pars[7],pars[8],pars[9]]])
+    """for the current test, we have 0+2 upperstage throttle, 3+4 lowerstage throttle,
+    1+3 upperstage tvc-theta and 1+3 lowerstage tvc-theta points - 17 in all"""
+    
+    upperThrottleTimes=[0.,1.]
+    upperThrottleSettings=[np.clip(pars[0],0.,1.),np.clip(pars[1],0.,1.)]
+    
+    lowerThrottleTimes=[0.,0.25+np.clip(pars[2],-0.125,0.125),0.5+np.clip(pars[3],-0.125,0.125),0.75+np.clip(pars[4],-0.125,0.125),1.]
+    lowerThrottleSettings=[1.,np.clip(pars[5],0.,1.),np.clip(pars[6],0.,1.),np.clip(pars[7],0.,1.),np.clip(pars[8],0.,1.)]    
+    
+    upperThrottleSchedule=np.array([upperThrottleTimes,upperThrottleSettings])
+    lowerThrottleSchedule=np.array([lowerThrottleTimes,lowerThrottleSettings])
+    
+    lowerTVCPhi=[np.clip(pars[10],0.,pi)+pi/2,np.clip(pars[11],0.,pi)+pi/2,np.clip(pars[12],0.,pi)+pi/2]
+    upperTVCPhi=[np.clip(pars[14],0.,pi)+pi/2,np.clip(pars[15],0.,pi)+pi/2,np.clip(pars[16],0.,pi)+pi/2]
+    
 
-    lowerTVCSchedule=np.array([[0.,pars[10],1.],[pi/2,pi/2,pi/2],[pars[11],pars[12],pars[13]]])
-    upperTVCSchedule=np.array([[0.,pars[14],1.],[pi/2,pi/2,pi/2],[pars[15],pars[16],pars[17]]])
+    lowerTVCSchedule=np.array([[0.,np.clip(pars[ 9],0.,1.),1.],[pi/2,pi/2,pi/2],lowerTVCPhi])
+    upperTVCSchedule=np.array([[0.,np.clip(pars[13],0.,1.),1.],[pi/2,pi/2,pi/2],upperTVCPhi])
 
     testPayload=Stage(5.,1.,0.,0.,0.,0.,0.,0.,upperThrottleSchedule,0.,upperTVCSchedule)
     testUpperStage=Stage(120.0,7.0,350.0,0.0,0.7,0.28,0.4,0.2,upperThrottleSchedule,0.04,upperTVCSchedule)
@@ -77,7 +88,7 @@ def f(pars):
     return fitness
 
 test=spop.fmin(f,testStartPoint,maxiter=100)
-#last time: test=np.asarray([ 0.97368009,  0.96763239,  0.24523624,  0.49324878,  0.72762755, 1.00416857,  0.95933795,  0.97403668,  0.95350731,  1.00531046, 0.46458082,  1.67220112,  2.17312733,  2.66346563,  0.41540276, 2.4781154 ,  3.13789563,  3.55330601])
+#last time: test=np.asarray([  9.18614021e-01,   8.91426376e-01,   1.70268538e-04, -1.06837974e-03,  -2.04178832e-04,   9.59172540e-01, 8.67570250e-01,   1.02605773e+00,   1.02985045e+00, 3.55660691e-01,  -4.23176627e-04,   4.16105945e-01, 1.00786586e+00,   4.98887445e-01,   8.54004016e-01, 1.67364199e+00,   2.06206756e+00])
 
 tempPoint=np.copy(test)
 
