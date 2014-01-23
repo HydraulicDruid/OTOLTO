@@ -162,9 +162,11 @@ class Stage(object):
         self.throttleSchedule[1][0:len(self.throttleSchedule[1])]+=min_throttle
         
         self.tvcSchedule[0][0:len(self.tvcSchedule[1])]*=self.burnoutTime
+
+        print(self.throttleSchedule)
             
-        self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='linear')
-        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='linear')
+        self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='quadratic')
+        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='quadratic')
         
     def burnFuel(self,mass):
         self.propmass-=mass
@@ -229,8 +231,8 @@ class Stage(object):
         self.tvcSchedule[0][0:len(self.tvcSchedule[0])]+=preIgnitionCoastTime
         self.throttleSchedule[0][0:len(self.throttleSchedule[0])]+=preIgnitionCoastTime
         
-        self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='linear')
-        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='linear')        
+        self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='quadratic')
+        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='quadratic')        
             
 class Rocket(object):
     """A rocket with an arbitrary number of stages, each of which has its own 
