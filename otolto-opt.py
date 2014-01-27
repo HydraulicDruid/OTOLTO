@@ -1,5 +1,13 @@
 from otolto import * 
 import scipy.optimize as spop
+import cma
+import multiprocessing
+
+if __name__ == '__main__':
+    print('My name is __main__!')
+    multiprocessing.freeze_support()
+
+multiprocessing.freeze_support()
 
 desiredEccentricity=0.0
 desiredInclination=0.0
@@ -8,9 +16,9 @@ desiredSemiMajor=7e6
 eccTol=0.002
 smaTol=1.0
         
-smaWeight=0.001
+smaWeight=1e-4
 eccWeight=20
-propResidualWeight=-0.1
+propResidualWeight=-10.
 
 testAtmosphere=Atmosphere(0,1.2,29.26,260)
 testEarth=Planet(5.97219e24, 6371e3, 86164.1, testAtmosphere)
@@ -22,51 +30,80 @@ steps=10
 
 arr=np.zeros((steps,steps))
 
-testStartPoint=np.array([1.0,1.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,0.5,0,0.4,0.8,0.5,0.8,1.2,1.6])
+testSPoint=np.array([0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.0,0.5,0.1,0.2,0.7,0.4,0.1,0.2,.35,7.0,0.5])
+testLBound=np.array([.01,.01,.01,.01,.01,.01,.01,.01,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,5.5,0.0])
+testUBound=np.array([1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0, pi, pi, pi, pi, pi, pi, pi, pi,.50,11.,99.])
 
 #testStartPoint=np.asarray([ 0.97368009,  0.96763239,  0.24523624,  0.49324878,  0.72762755, 1.00416857,  0.95933795,  0.97403668,  0.95350731,  1.00531046, 0.46458082,  1.67220112,  2.17312733,  2.66346563,  0.41540276, 2.4781154 ,  3.13789563,  3.55330601])
 #testStartPoint=np.array([  3.11592812,   2.31278171,   0.25      ,   0.5       , 0.75      ,   3.98778947,   4.19956555,   1.90349192, 3.27566526,   2.63714774, -14.90366124,   4.38034555, 21.22269636,  23.06061613,  -1.72499083,   7.37530809, 5.48134183,  -2.59405555])
 #testStartPoint=np.array([  1,   1,   0.25      ,   0.5       , 0.75      ,   1,   1,   1, 1,   1, -14.90366124,   4.38034555, 21.22269636,  23.06061613,  -1.72499083,   7.37530809, 5.48134183,  -2.59405555])
 
-def f(pars):
-    """for the current test, we have 0+2 upperstage throttle, 3+4 lowerstage throttle,
-    1+3 upperstage tvc-theta and 1+3 lowerstage tvc-theta points - 17 in all"""
+def f_TVCOnly(pars):
+    """pars has 4n+3 datapoints (where n is the number of data points, and the last two points are the throttles of the stages, and the actual last one is the upper stage coast time)"""
     
-    upperThrottleTimes=[0.,1.]
-    upperThrottleSettings=[np.clip(pars[0],0.,1.),np.clip(pars[1],0.,1.)]
+    #upperThrottleTimes=[0.,1.]
+    #upperThrottleSettings=[np.clip(pars[0],0.,1.),np.clip(pars[1],0.,1.)]
+    nonDataPointCount=3
     
-    lowerThrottleTimes=[0.,0.25+np.clip(pars[2],-0.125,0.125),0.5+np.clip(pars[3],-0.125,0.125),0.75+np.clip(pars[4],-0.125,0.125),1.]
-    lowerThrottleSettings=[1.,np.clip(pars[5],0.,1.),np.clip(pars[6],0.,1.),np.clip(pars[7],0.,1.),np.clip(pars[8],0.,1.)]    
+    throttleTimes=[0.,1.]
+    throttleSettings=[1.,1.]
     
-    upperThrottleSchedule=np.array([upperThrottleTimes,upperThrottleSettings])
-    lowerThrottleSchedule=np.array([lowerThrottleTimes,lowerThrottleSettings])
+    upperThrottleSchedule=np.array([throttleTimes,throttleSettings])
+    lowerThrottleSchedule=np.array([throttleTimes,throttleSettings])
     
-    lowerTVCPhi=[np.clip(pars[10],0.,pi)+pi/2,np.clip(pars[11],0.,pi)+pi/2,np.clip(pars[12],0.,pi)+pi/2]
-    upperTVCPhi=[np.clip(pars[14],0.,pi)+pi/2,np.clip(pars[15],0.,pi)+pi/2,np.clip(pars[16],0.,pi)+pi/2]
+    n=floor((len(pars)-nonDataPointCount)/4)
+    #print(n)
     
+    lowerTVCTimes=pars[0:n]
+    upperTVCTimes=pars[n:2*n]
+    
+    lowerTVCPhi=pars[2*n:3*n]
+    upperTVCPhi=pars[3*n:4*n]
+    
+    lowerTVCTheta=np.ones(n+1)*(pi/2)
+    upperTVCTheta=np.ones(n+1)*(pi/2)
+    
+    """print(lowerTVCTimes)
+    print(upperTVCTimes)
+    print(lowerTVCPhi)
+    print(upperTVCPhi)"""
+    
+    #now process them
+    lowerTVCTimes=np.insert(np.cumsum(np.clip(lowerTVCTimes,0.01,1)),0,0)
+    lowerTVCTimes/=lowerTVCTimes[-1]
+    
+    upperTVCTimes=np.insert(np.cumsum(np.clip(upperTVCTimes,0.01,1)),0,0)
+    upperTVCTimes/=upperTVCTimes[-1]
+    
+    lowerTVCPhi=np.clip(np.cumsum(np.clip(np.insert(lowerTVCPhi,0,0),0.,np.Inf)),0,pi)+pi/2
+    upperTVCPhi=np.clip(np.cumsum(np.clip(np.insert(upperTVCPhi,0,lowerTVCPhi[-1]-pi/2),0.,np.Inf)),0,pi)+pi/2
 
-    lowerTVCSchedule=np.array([[0.,np.clip(pars[ 9],0.,1.),1.],[pi/2,pi/2,pi/2],lowerTVCPhi])
-    upperTVCSchedule=np.array([[0.,np.clip(pars[13],0.,1.),1.],[pi/2,pi/2,pi/2],upperTVCPhi])
+    #and assemble them
+    lowerTVCSchedule=np.array([lowerTVCTimes,lowerTVCTheta,lowerTVCPhi])
+    upperTVCSchedule=np.array([upperTVCTimes,upperTVCTheta,upperTVCPhi])
 
-    testPayload=Stage(5.,1.,0.,0.,0.,0.,0.,0.,upperThrottleSchedule,0.,upperTVCSchedule)
-    testUpperStage=Stage(120.0,7.0,350.0,0.0,0.7,0.28,0.4,0.2,upperThrottleSchedule,0.04,upperTVCSchedule)
-    testLowerStage=Stage(1400.0,10.0,315.0,275.0,0.1,0.0,7.0,4.0,lowerThrottleSchedule,0.04,lowerTVCSchedule)
+    #print(lowerTVCSchedule)
+    #print(upperTVCSchedule)
+
+    testPayload=InertStage(5.,0.,0.,30.0)
+    testUpperStage=Stage( 90.0, 8.0,350.0,  0.0,0.7,0.3,pars[-3],pars[-3],upperThrottleSchedule,0.04,upperTVCSchedule)
+    testLowerStage=Stage(800.0,15.0,315.0,275.0,0.1,0.0,pars[-2],pars[-2],lowerThrottleSchedule,0.04,lowerTVCSchedule)
 
     testRocket=Rocket(testPayload)
-    testRocket.addSerialStage(testUpperStage,0.5,2.0)
+    testRocket.addSerialStage(testUpperStage,np.clip(pars[-1],0.1,np.Inf),2.0)
     testRocket.addSerialStage(testLowerStage,0.0,2.0)
-        
-    print("Simulating flight...")
-    blah=testRocket.rk4Flight(coords,velocity,testEarth,0.0,800,True,desiredSemiMajor,0.8)
+    
+    #print("Simulating flight...")
+    blah=testRocket.rk4Flight(coords,velocity,testEarth,0.0,800,True,desiredSemiMajor,3)
     arblah=np.asarray(blah)
     arlog=np.asarray(testRocket.flightlog)
-    print("done!")
+    #print("done!")
 
     kepEls=testEarth.fiveKeplerianElements(arblah[-1,0:3],arblah[-1,3:6])
-    propResidual=arlog[-1]-testRocket.stages[0].drymass-testRocket.stages[1].drymass
+    propResidual=arlog[-1][1]-testRocket.stages[0].drymass-testRocket.stages[1].drymass-testRocket.stages[1].residualProp
     
-    print(kepEls)
-    print(propResidual)
+    #print(kepEls)
+    #print(propResidual)
 
     fitness=0.;
     componentstr=""
@@ -80,15 +117,33 @@ def f(pars):
         componentstr+="e was "+str(kepEls[0])
     else:
         fitness+=propResidual*propResidualWeight
-        componentstr+="e good and "+str(propResidualWeight)+"kg residual."    
+        componentstr+="e good and "+str(propResidual)+"kg residual."    
     
     componentstr+=" Fitness="+str(fitness)
         
     print(componentstr)
     return fitness
 
-test=spop.fmin(f,testStartPoint,maxiter=100)
-#last time: test=np.asarray([  9.18614021e-01,   8.91426376e-01,   1.70268538e-04, -1.06837974e-03,  -2.04178832e-04,   9.59172540e-01, 8.67570250e-01,   1.02605773e+00,   1.02985045e+00, 3.55660691e-01,  -4.23176627e-04,   4.16105945e-01, 1.00786586e+00,   4.98887445e-01,   8.54004016e-01, 1.67364199e+00,   2.06206756e+00])
+"""
+es=cma.CMAEvolutionStrategy(testStartPoint,1, {'maxiter':400, 'bounds':[testLBound,testUBound]})
+pool=multiprocessing.Pool(es.popsize)
+while not es.stop():
+    X=es.ask()
+    MapRes=pool.map_async(f_TVCOnly, X)
+    es.tell(X, MapRes.get())
+    es.disp()
+"""
+
+#test=cma.fmin(f_TVCOnly, testStartPoint, 1, maxiter=20, bounds=[testLBound,testUBound])
+
+"""test=spop.fmin(f,testStartPoint,maxiter=100)
+#last time: test=np.array([  1.62429868e-01,   4.05661539e-01,   1.70682155e-01,
+         4.26791700e-01,   3.97759810e-01,   4.12189600e-01,
+         6.41961575e-01,   4.37625495e-01,   2.06544490e-03,
+         6.55420902e-01,   1.02260684e-01,   2.66786277e-01,
+         2.26000646e-04,   8.08809548e-01,   1.22724676e-01,
+         2.90182950e-01,   2.26687414e-01,   8.77939372e+00,
+         7.76663207e-01])
 
 tempPoint=np.copy(test)
 
@@ -99,7 +154,7 @@ for k in range(20):
         pass
     for n in range(len(testStartPoint)):
         tempPoint[n]=test[n]+np.random.normal(scale=0.05)
-    nearbyFitnesses.append(f(tempPoint))
+    nearbyFitnesses.append(f(tempPoint))"""
 
 #initialThing=np.zeros((2,3))
 #for k in range(3):

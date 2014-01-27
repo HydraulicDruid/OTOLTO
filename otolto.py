@@ -164,11 +164,7 @@ class Stage(object):
         self.tvcSchedule[0][0:len(self.tvcSchedule[1])]*=self.burnoutTime
             
         self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='linear')
-        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='linear')
-        
-    def burnFuel(self,mass):
-        self.propmass-=mass
-        print("Stage.burnFuel is deprecated!")
+        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='cubic')
         
     def mass(self,time):
         if time>=self.burnoutTime:
@@ -230,7 +226,41 @@ class Stage(object):
         self.throttleSchedule[0][0:len(self.throttleSchedule[0])]+=preIgnitionCoastTime
         
         self.mdotInterpolated=spip.interp1d(self.throttleSchedule[0],self.throttleSchedule[1],kind='linear')
-        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='linear')        
+        self.TVCsInterpolated=spip.interp1d(self.tvcSchedule[0],self.tvcSchedule[1:3,:],kind='cubic')        
+
+class InertStage(Stage):
+    """Unpropelled stages, e.g payloads and fairings"""
+    def __init__(self,M,additional_C_D,additional_frontal_area,septime):
+        self.drymass=M;
+        self.C_D_additional=additional_C_D
+        self.additionalFrontalArea=additional_frontal_area
+        self.sepTime=septime
+        self.ignitionTime=3e7
+        self.burnoutTime=3e7
+    
+    def mass(self,t):
+        if t<self.sepTime:
+            return self.drymass
+        else:
+            return 0.0
+        
+    def thrust(self,t,x,planet):
+        return 0.0
+        
+    def dragCoefficientContribution(self,t):
+        if t<self.sepTime:
+            return self.C_D_additional
+        else:
+            return 0.0
+            
+    def frontalAreaContribution(self,t):
+        if t<self.sepTime:
+            return self.additionalFrontalArea
+        else:
+            return 0.0
+    
+    def shiftTimesBy(self,preIgnitionCoastTime,postBurnoutCoastTime):
+        self.sepTime+=preIgnitionCoastTime+postBurnoutCoastTime
             
 class Rocket(object):
     """A rocket with an arbitrary number of stages, each of which has its own 
@@ -247,13 +277,6 @@ class Rocket(object):
         self.stages=[]
         self.flightlog=[]
         self.stages.append(copy.copy(payload))
-#        self.ignitionTimes=[]
-#        self.separationPropLevels=[]
-#        self.propellantUsageSchedule=propellantSchedule
-#        self.tvcSchedule=tvcSchedule
-        
-#        self.position=np.zeros(3)
-#        self.velocity=np.zeros(3)
         
     def addSerialStage(self,stageToAdd,preignitionCoastTime,postBurnoutCoastTime):
         stageCopy=copy.copy(stageToAdd)
@@ -338,7 +361,7 @@ class Rocket(object):
         if kepEls[1]>=targetSMA:
             sdot[6]=0
             #print(s)
-            print(str(kepEls[1])+">="+str(targetSMA))
+            #print(str(kepEls[1])+">="+str(targetSMA))
             return sdot            
         else:
             sdot[0:3]=v
@@ -435,7 +458,11 @@ class Rocket(object):
         
         keepSimulating=1
         
+        #print(self.stages[1].burnoutTime)
+        
         while t<simTime and keepSimulating>0 and t<self.stages[1].burnoutTime:
+            #if t>454:
+            #    print('---')
             distanceToNextSingularity=3e7
             
             for time in singularitytimes:
@@ -447,16 +474,29 @@ class Rocket(object):
 
             kepEls=planet.fiveKeplerianElements(s[0:3],s[3:6])
             
-            if desiredSemiMajor-kepEls[1]<terminalGuidanceThreshold:
-                h=max(h_min, h_base*(desiredSemiMajor-kepEls[1])/terminalGuidanceThreshold)
+            h_cand=[]
+            
+            #if t>454:
+            #    print("dist="+str(distanceToNextSingularity))
+            #    print("sma error="+str(desiredSemiMajor-kepEls[1]))
+            
+            if (desiredSemiMajor-kepEls[1])<terminalGuidanceThreshold:
+                h_cand.append(max(h_min, h_base*(desiredSemiMajor-kepEls[1])/terminalGuidanceThreshold))
                 if not terminalGuidanceActive:
                     terminalGuidanceActive=True
-                    print("Terminal guidance active!")
-            elif distanceToNextSingularity<singularityThreshold:
-                h=max(h_min, h_base*distanceToNextSingularity/singularityThreshold)
-            else:
-                h=h_base
-
+                    #print("Terminal guidance active!")
+            if distanceToNextSingularity<singularityThreshold:
+                h_cand.append(max(h_min, h_base*distanceToNextSingularity/singularityThreshold))
+                #if t>454:
+                #    print("Singularity approaching! t="+str(t)+", h="+str(h))
+            
+            h_cand.append(h_base)
+            
+            h=min(h_cand)
+                
+            #if t>454:
+            #    print("h="+str(h))
+                
             k2=self.sDot(t+0.5*h,s+(0.5*h)*k1,planet,desiredSemiMajor)
             k3=self.sDot(t+0.5*h,s+(0.5*h)*k2,planet,desiredSemiMajor)            
             k4=self.sDot(t+h,s+h*k3,planet,desiredSemiMajor)
