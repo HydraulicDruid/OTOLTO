@@ -1,4 +1,1 @@
-OTOLTO
-======
-
-Open Toolkit for Orbital and Launch Trajectory Optimisation
+Bunch of old experiments I did when trying to learn how to optimise launch vehicle trajectories. None particularly good.
